@@ -5,8 +5,44 @@ from urllib.parse import  urlparse, parse_qs
 
 
 def main(page: ft.Page):
-    page.title = "Musculação APP"
+    page.title = "Quattor Musculação"
+
+    # Cupertino Navigation Bar (definida fora das funções de página)
+    def on_nav_change(e):
+        if e.control.selected_index == 0:
+            page.go("/")
+        elif e.control.selected_index == 1:
+            page.go("/registrar")
+        elif e.control.selected_index == 2:
+            page.go("/historico")
+        page.update()
+
+    nav_bar = ft.CupertinoNavigationBar(
+        bgcolor=ft.colors.ORANGE_500,
+        inactive_color=ft.colors.WHITE70,
+        active_color=ft.colors.BLACK,
+        destinations=[
+            ft.NavigationBarDestination(
+                icon=ft.icons.HOME,
+                label="Home",
+            ),
+            ft.NavigationBarDestination(
+                icon=ft.icons.PERSON_3,
+                label="Treinos",
+            ),
+            ft.NavigationBarDestination(
+                icon=ft.icons.HISTORY,
+                label="Histórico",
+            ),
+        ],
+        height=100,
+        on_change=on_nav_change
+    )
+
     def home_page():
+        nav_bar.selected_index = 0
+        nav_bar.active_color = ft.colors.BLACK
+        nav_bar.inactive_color = ft.colors.WHITE70
         logo = ft.Image(
             src="https://quattoracademia.com.br/logo_preto.svg",  
             width=50,
@@ -69,44 +105,22 @@ def main(page: ft.Page):
         view = ft.View(
             route="/",
             controls=[safe_area],
+            navigation_bar=nav_bar,
             bgcolor=ft.colors.GREY_100
         )
         page.views.append(view)
 
     def registrar_page():
+        nav_bar.selected_index = 1
+        nav_bar.active_color = ft.colors.BLACK
+        nav_bar.inactive_color = ft.colors.WHITE70
+        if not page.data:
+            page.open(ft.SnackBar(ft.Text("Por favor, entre com uma matrícula ou CPF")))
+            page.go("/")
+            return
         resultado = page.data  # Recupera o resultado
-        def on_nav_change(e):
-            if e.control.selected_index == 0:
-                page.go("/")
-            elif e.control.selected_index == 1:
-                page.go("/registrar")
-            elif e.control.selected_index == 2:
-                page.go("/historico")
-            page.update()
-
-        # Navigation Bar
-        nav_bar = ft.NavigationBar(
-            destinations=[
-                ft.NavigationBarDestination(
-                    icon=ft.icons.HOME,
-                    label="Home",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.icons.PERSON_3,
-                    label="Treinos",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.icons.HISTORY,
-                    label="Histórico",
-                ),
-            ],
-            selected_index=1,
-            bgcolor=ft.colors.ORANGE_500,
-            indicator_color=ft.colors.WHITE,
-            label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
-            height=100,
-            on_change=on_nav_change
-        )
+        
+        
 
         logo = ft.Image(
             src="https://quattoracademia.com.br/logo_preto.svg",
@@ -185,40 +199,40 @@ def main(page: ft.Page):
         page.views.append(view)
         page.update()
 
-    def treino_page(grupo):
-        def on_nav_change(e):
-            if e.control.selected_index == 0:
-                page.go("/")
-            elif e.control.selected_index == 1:
-                page.go("/registrar")
-            elif e.control.selected_index == 2:
-                page.go("/historico")
-
-            page.update()
-        # Navigation Bar
-        nav_bar = ft.NavigationBar(
-            destinations=[
-                ft.NavigationBarDestination(
-                    icon=ft.icons.HOME,
-                    label="Home",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.icons.PERSON_3,
-                    label="Treinos",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.icons.HISTORY,
-                    label="Histórico",
-                ),
-            ],
-            selected_index=1,
-            bgcolor=ft.colors.ORANGE_500,
-            indicator_color=ft.colors.WHITE,
-            label_behavior=ft.NavigationBarLabelBehavior.ONLY_SHOW_SELECTED,
-            height=100,
-            on_change=on_nav_change
-        )
+    def registrar_exercicio(e, exercicio, grupo):
+        resultado = page.data
+        # Encontrar o campo de carga no container pai
+        container = e.control.parent.parent.parent
+        # O campo de carga está na terceira linha (índice 2) do Column
+        campo_carga = container.content.controls[2].controls[0]
+        carga = campo_carga.value if campo_carga.value else "0"
         
+        treino = {
+            "matricula": resultado["registration"],
+            "grupo": grupo,
+            "nome": exercicio["nome"],
+            "carga": carga
+        }
+        try:
+            registrado = registrar_treino(treino)
+            if registrado and isinstance(registrado, dict):
+                # Mudar a cor do botão e desabilitá-lo
+                botao = e.control
+                botao.bgcolor = ft.colors.GREEN
+                botao.color = ft.colors.WHITE
+                botao.disabled = True
+                botao.text = "✓"
+                page.open(ft.SnackBar(ft.Text(f"Exercício {exercicio['nome']} registrado com sucesso!")))
+            else:
+                page.open(ft.SnackBar(ft.Text(f"Erro ao registrar exercício {exercicio['nome']}")))
+        except Exception as e:
+            page.open(ft.SnackBar(ft.Text(f"Erro ao registrar exercício: {str(e)}")))
+        page.update()
+
+    def treino_page(grupo):
+        nav_bar.selected_index = 1
+        nav_bar.active_color = ft.colors.BLACK
+        nav_bar.inactive_color = ft.colors.WHITE70
         treinos = buscar_treino(grupo)
         logo = ft.Image(
             src="https://quattoracademia.com.br/logo_preto.svg",
@@ -236,74 +250,137 @@ def main(page: ft.Page):
         nome_grupo = ft.Text(grupo, size=22, weight=ft.FontWeight.BOLD, font_family="Arial", color=ft.colors.GREY_600)
 
         for exercicio in treinos:
-            lista_exercicios.controls.append(ft.Container(
-                content=ft.Column([    
+            container = ft.Container(
+                content=ft.Column([
+                    # Nome do exercício
                     ft.Row([
-                        ft.Checkbox(
-                            active_color=ft.colors.ORANGE_500,
-                            width=30
-                        ),
-                        ft.Container(
-                            content=ft.Text(
-                                exercicio['nome'],
-                                size=16,
-                                weight=ft.FontWeight.BOLD,
-                                selectable=True
-                            ),
+                        ft.Text(
+                            exercicio['nome'],
+                            size=16,
+                            weight=ft.FontWeight.BOLD,
+                            selectable=True,
                             width=300,
-                            expand=True
+                            
+                            overflow=ft.TextOverflow.ELLIPSIS
                         ),
-                    ]),
-                    ft.Container(
-                        content=ft.Row([
-                            ft.Icon(ft.icons.REPEAT, color=ft.colors.GREY_400),
-                            ft.Text(
-                                exercicio['Repeticoes'],
-                                size=22,
-                                weight=ft.FontWeight.BOLD,
-                                font_family="Arial",
-                                color=ft.colors.ORANGE_600
-                            ),
-                        ], alignment=ft.MainAxisAlignment.CENTER),
-                        alignment=ft.alignment.center
+                    ],
+                    alignment=ft.MainAxisAlignment.START
                     ),
-                    ft.Text(exercicio['obs']),
-                ]),
+                    # Repetições
+                    ft.Row([
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Icon(ft.icons.REPEAT, color=ft.colors.GREY_400),
+                                ft.Text(
+                                    exercicio['Repeticoes'],
+                                    size=20,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=ft.colors.ORANGE_600
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.CENTER
+                            )
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.START
+                    ),
+                    # Carga
+                    ft.Row([
+                        ft.TextField(
+                            label="Carga",
+                            text_align=ft.TextAlign.CENTER,
+                            width='full',
+                            height=42,
+                            border_width=1,
+                            border_color=ft.colors.GREY_300,
+                            border_radius=10,
+                            bgcolor=ft.colors.GREY_50,
+
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER
+                    ),
+                    # Botão Registrar
+                    ft.Row([
+                        ft.ElevatedButton('+',
+                            # icon=ft.icons.DONE,
+                            width=50,
+                            height=20,
+                            # color=ft.colors.WHITE,
+                            bgcolor=ft.colors.ORANGE_100,
+                            on_click=lambda e, ex=exercicio: registrar_exercicio(e, ex, grupo)
+                        )
+                    ],
+                    alignment=ft.MainAxisAlignment.END
+                    )
+                ],
+                spacing=10
+                ),
+                padding=ft.padding.all(10),
+                expand=True,
                 bgcolor=ft.colors.WHITE,
                 border_radius=10,
-                padding=10,
-                shadow=ft.BoxShadow(blur_radius=6, color=ft.colors.GREY_300),
-            ))
+                shadow=ft.BoxShadow(blur_radius=2, color=ft.colors.GREY_300)
+            )
+            lista_exercicios.controls.append(container)
         def on_registrar_treino(e):
             resultado = page.data 
-            treinos = {
-                "matricula": resultado["registration"],
-                "grupo": grupo,
-            }
-            try:
-                registrado = registrar_treino(treinos)
-                if registrado and isinstance(registrado, dict):
-                    page.open(ft.SnackBar(ft.Text(f" {grupo} atualizado com sucesso")))
-                    print("Treino registrado com sucesso:", registrado)
-                    page.go("/registrar")
-                else:
-                    print("Resposta inesperada da API:", registrado)
-            except Exception as e:
-                print(f"Erro ao registrar treino: {str(e)}")
-                # Mostrar mensagem de erro para o usuário
-              
+            exercicios_selecionados = []
+            
+            # Coletar exercícios selecionados e suas cargas
+            for container in lista_exercicios.controls:
+                # Acessar o conteúdo do Container que é um Column
+                column = container.content
+                # Acessar o primeiro Container dentro do Column que contém o Row
+                row_container = column.controls[0]
+                # Acessar o Row dentro do Container
+                row = row_container.content
+                checkbox = row.controls[0]
+                nome_exercicio = row.controls[1].value
+                # Acessar o campo de carga que está no terceiro Container do Column
+                campo_carga = column.controls[2].content
+                carga = campo_carga.value
+                
+                if checkbox.value:  # Se o exercício foi selecionado
+                    exercicios_selecionados.append({
+                        "nome": nome_exercicio,
+                        "carga": carga if carga else "0"
+                    })
+            
+            if not exercicios_selecionados:
+                page.open(ft.SnackBar(ft.Text("Selecione pelo menos um exercício")))
+                return
+                
+            for exercicio in exercicios_selecionados:
+                treino = {
+                    "matricula": resultado["registration"],
+                    "grupo": grupo,
+                    "nome": exercicio["nome"],
+                    "carga": exercicio["carga"]
+                }
+                try:
+                    registrado = registrar_treino(treino)
+                    if registrado and isinstance(registrado, dict):
+                        print(f"Exercício {exercicio['nome']} registrado com sucesso:", registrado)
+                    else:
+                        print(f"Resposta inesperada da API para {exercicio['nome']}:", registrado)
+                except Exception as e:
+                    print(f"Erro ao registrar exercício {exercicio['nome']}: {str(e)}")
+            
+            page.open(ft.SnackBar(ft.Text(f"Treino de {grupo} registrado com sucesso")))
+            page.go("/registrar")
             page.update()
 
          # Botão
-        registar_button = ft.FilledButton(
-            text="Registrar Treino", 
-            width=300, 
-            bgcolor=ft.colors.GREY_500,
-            icon="add",
-            on_click=on_registrar_treino
-        )
+        # registar_button = ft.FilledButton(
+        #     text="Registrar Treino", 
+        #     width=300, 
+        #     bgcolor=ft.colors.GREY_500,
+        #     icon="add",
+        #     on_click=on_registrar_treino
+        # )
         content = ft.Column(
-            controls=[logo,nome_grupo,  lista_exercicios, registar_button],
+            controls=[nome_grupo,  lista_exercicios ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=20, 
             expand=True,  
@@ -312,7 +389,7 @@ def main(page: ft.Page):
         safe_area = ft.SafeArea(
             content=content,
             maintain_bottom_view_padding=True
-        )    
+        )     
 
         view = ft.View(
             route="/treino",
@@ -323,6 +400,13 @@ def main(page: ft.Page):
         page.update()
         
     def historico_page():
+        nav_bar.selected_index = 2
+        nav_bar.active_color = ft.colors.BLACK
+        nav_bar.inactive_color = ft.colors.WHITE70
+        if not page.data:
+            page.open(ft.SnackBar(ft.Text("Por favor, entre com uma matrícula ou CPF")))
+            page.go("/")
+            return
         resultado = page.data
         historico = buscar_historico(resultado["registration"])
         
@@ -331,37 +415,60 @@ def main(page: ft.Page):
             spacing=10,
             padding=20,
             auto_scroll=False,
-            height=550,  # Altura fixa para o ListView
+            height=550,
         )
-        for exercicio in historico:
-            historico_exercicios.controls.append(ft.Container(
+
+        for grupo, exercicios in historico.items():
+            # Container para o grupo
+            grupo_container = ft.Container(
                 content=ft.Column([
                     ft.Text(
-                        exercicio['grupo'],
+                        grupo,
                         size=20,
                         weight=ft.FontWeight.BOLD,
                         color=ft.colors.ORANGE_600
                     ),
-                    ft.Text(
-                        f" {exercicio['data']}",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.colors.GREY_600,
-                        text_align=ft.TextAlign.CENTER,
-                        
+                    # Lista de exercícios do grupo
+                    ft.ListView(
+                        controls=[
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Row([
+                                        ft.Text(
+                                            exercicio['nome'],
+                                            size=15,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=ft.colors.GREY_600,
+                                            width=250
+                                        ),
+                                        ft.Text(
+                                            f"{exercicio['carga']}kg",
+                                            size=16,
+                                            color=ft.colors.ORANGE_500
+                                        )
+                                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                                    ft.Text(
+                                        f"Data: {exercicio['data']}",
+                                        size=14,
+                                        color=ft.colors.GREY_400
+                                    )
+                                ]),
+                                bgcolor=ft.colors.WHITE,
+                                border_radius=10,
+                                padding=10,
+                                shadow=ft.BoxShadow(blur_radius=2, color=ft.colors.GREY_300),
+                            ) for exercicio in exercicios
+                        ],
+                        spacing=5,
+                        height=len(exercicios) * 80
                     )
-                    
-                ]
-                
-                ),
+                ]),
                 bgcolor=ft.colors.WHITE,
                 border_radius=10,
                 padding=10,
                 shadow=ft.BoxShadow(blur_radius=6, color=ft.colors.GREY_300),
-                
-                        
-            ))
-        
+            )
+            historico_exercicios.controls.append(grupo_container)
 
         logo = ft.Image(
             src="https://quattoracademia.com.br/logo_preto.svg",
@@ -370,38 +477,6 @@ def main(page: ft.Page):
             fit=ft.ImageFit.FIT_WIDTH,
         )
         
-        def on_nav_change(e):
-            if e.control.selected_index == 0:
-                page.go("/")
-            elif e.control.selected_index == 1:
-                page.go("/registrar")
-            elif e.control.selected_index == 2:
-                page.go("/historico")
-
-            page.update()
-        # Navigation Bar
-        nav_bar = ft.NavigationBar(
-            destinations=[
-                ft.NavigationBarDestination(
-                    icon=ft.icons.HOME,
-                    label="Home",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.icons.PERSON_3,
-                    label="Treinos",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.icons.HISTORY,
-                    label="Histórico",
-                ),
-            ],
-            selected_index=2,
-            bgcolor=ft.colors.ORANGE_500,
-            indicator_color=ft.colors.WHITE,
-            label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
-            height=100,
-            on_change=on_nav_change
-        )
         content = ft.Container(
             content=ft.Column(
                 controls=[
